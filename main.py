@@ -4,7 +4,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, ParseMode
 from telegram.ext import (
     Filters, CommandHandler, Updater, MessageHandler
 )
@@ -17,14 +17,12 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 HEADERS = {'X-API-KEY': f'{KINOPOISK_TOKEN}'}
-URL = 'https://api.kinopoisk.dev/v1.4/movie/random?type='
+URL = 'https://api.kinopoisk.dev/v1.4/movie/random?notNullFields=name&notNullFields=type'
 
 
 def get_new_film():
-    """Выводит id рандомного фильма."""
-    response = requests.get(URL, headers=HEADERS).json()
-    random_film = response.get('names')
-    return random_film
+    """Возвращает json рандомного фильма."""
+    return requests.get(URL, headers=HEADERS).json()
 
 
 def start(update, context):
@@ -38,6 +36,7 @@ def start(update, context):
 
 
 def new_film(update, context):
+    """Отправляет пользователю сообщение с данными о фильме."""
     chat = update.effective_chat
     buttons = ReplyKeyboardMarkup(
         [['Найти фильм'], ['Возможности бота']],
@@ -47,9 +46,32 @@ def new_film(update, context):
         text='Привет, посмотри, какой фильм я тебе нашёл',
         reply_markup=buttons
         )
-    context.bot.send_message(chat.id, get_new_film())
+    film_data = get_new_film()
 
-
+    if film_data:
+        photo_url = film_data.get('poster', {}).get('previewUrl', None)
+        genre_names = [
+            genre.get("name") for genre in film_data.get("genres", [])
+            ]
+        film_info = (
+            f'{film_data.get("name")}\n'
+            f'Тип: {film_data.get("type")}\n'
+            f'Жанр: {", ".join(genre_names)}\n'
+            f'Продолжительность: {film_data.get("movieLength")} мин\n'
+            f'Год: {film_data.get("year")}\n'
+            f'Описание: {film_data.get("description")}\n'
+        )
+        if photo_url:
+            context.bot.send_photo(chat.id, photo_url, caption=film_info)
+        else:
+            context.bot.send_message(
+                chat.id, film_info, parse_mode=ParseMode.MARKDOWN_V2
+            )
+    else:
+        context.bot.send_message(
+            chat.id,
+            'Не удалось получить информацию о фильме. Попробуйте еще раз.'
+        )
 
 
 def echo(update, context):
