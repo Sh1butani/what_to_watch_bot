@@ -2,7 +2,6 @@ import logging
 import requests
 import os
 import sys
-import html
 
 from dotenv import load_dotenv
 from telegram import ReplyKeyboardMarkup
@@ -67,11 +66,14 @@ def translate_film_type(type):
 def generate_film_info(film_data):
     """Генерирует информацию о фильме от API кинопоиска."""
     genre_names = [genre.get("name") for genre in film_data.get("genres", [])]
+    kp_rating = film_data.get("rating", {}).get("kp")
+    imdb_rating = film_data.get("rating", {}).get("imdb")
+    imdb_id = film_data.get("externalId").get("imdb") if "imdb" in film_data.get("externalId") else None
     film_info = (
         f'<b>{film_data.get("name")}</b>\n'
         '\n'
-        f'Кинопоиск: {film_data.get("rating", {}).get("kp")}\n'
-        f'IMDB: {film_data.get("rating", {}).get("imdb")}\n'
+        f'<a href="https://www.kinopoisk.ru/film/{film_data.get("id")}">Кинопоиск: {kp_rating}</a>\n'
+        f'<a href="https://www.imdb.com/title/{film_data.get("externalId").get("imdb")}">IMDB: {imdb_rating}</a>\n'
         '\n'
         f'<i>Тип:</i> {translate_film_type(film_data.get("type"))}\n'
         f'<i>Жанр:</i> {", ".join(genre_names)}\n'
