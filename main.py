@@ -17,9 +17,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 HELP_COMMAND = """
-<b>/help</b> - <em>список команд</em>
-<b>/start</b> - <em>запуск бота</em>
-<b>/newfilm</b> - <em>найти новый фильм</em>"""
+<b>/start</b> - <em>Запуск бота</em>
+<b>/help</b> - <em>Список команд</em>
+<b>/findfilm</b> - <em>Найти фильм или сериал исходя из ваших предпочтений</em>
+<b>/randomfilm</b> - <em>Абсолютно рандомный фильм</em>
+"""
 
 CONTENT_TYPES = {
     'animated-series': 'мультсериал',
@@ -38,12 +40,12 @@ def start(update, context):
     name = update.message.chat.first_name
     chat = update.effective_chat
     buttons = ReplyKeyboardMarkup(
-        [['/newfilm'], ['/help']],
+        [['/findfilm'], ['/randomfilm'], ['/help']],
         resize_keyboard=True)
     context.bot.send_message(
         chat_id=chat.id,
-        text='Спасибо, что включили меня, {}! '
-        'Чтобы узнать, что я умею, воспользуйтесь кнопкой /help'.format(name),
+        text='❤️ Спасибо, что включили меня, {} !\n'
+        '❔ Чтобы узнать, что я умею, воспользуйтесь командой /help '.format(name),
         reply_markup=buttons
         )
 
@@ -58,9 +60,27 @@ def help(update, context):
     )
 
 
+def echo(update, context):
+    """Отвечает на любое текстовое сообщение пользователя."""
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Воспользуйтесь командой /help для детальной информации.'
+        )
+
+
 def translate_film_type(type):
     """Переводит английское значение типа на русское."""
     return CONTENT_TYPES.get(type, type)
+
+
+def create_kinopoisk_link(year, genre, country):
+    """Формирует ссылку кинопоиска в зависимости от запросов юзеров."""
+    payload = {
+        "year": year,
+        "genres.name": genre,
+        "countries.name": country,
+    }
+    return requests.get(URL, params=payload, headers=HEADERS)
 
 
 def generate_film_info(film_data):
@@ -85,8 +105,8 @@ def generate_film_info(film_data):
     return film_info
 
 
-def get_new_film(update, context):
-    """Отправляет пользователю сообщение с данными о фильме."""
+def get_random_film(update, context):
+    """Отправляет пользователю сообщение с данными о рандомном фильме."""
     chat = update.effective_chat
     context.bot.send_message(
         chat_id=chat.id,
@@ -110,11 +130,12 @@ def get_new_film(update, context):
         )
 
 
-def echo(update, context):
-    """Отвечает на любое текстовое сообщение пользователя."""
+def find_film(update, context):
+    """Начинает разговор и подбирает фильтры от юзера для запроса к API."""
+    chat = update.effective_chat
     context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Воспользуйтесь кнопкой "Возможности бота" для детальной информации.'
+        chat_id=chat.id,
+        text='Давай подберем тебе что-то интересное 😎',
         )
 
 
@@ -126,12 +147,14 @@ def main():
     start_handler = CommandHandler('start', start)
     help_handler = CommandHandler('help', help)
     echo_handler = MessageHandler(Filters.text & (~Filters.command), echo)
-    new_film_handler = CommandHandler('newfilm', get_new_film)
+    random_film_handler = CommandHandler('randomfilm', get_random_film)
+    find_film_handler = CommandHandler('findfilm', find_film)
 
     dispatcher.add_handler(start_handler)
     dispatcher.add_handler(help_handler)
     dispatcher.add_handler(echo_handler)
-    dispatcher.add_handler(new_film_handler)
+    dispatcher.add_handler(random_film_handler)
+    dispatcher.add_handler(find_film_handler)
 
     updater.start_polling()
     updater.idle()
