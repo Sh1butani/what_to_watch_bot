@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import re
 
 import requests
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ CONTENT_TYPES = {
 }
 
 
-FIRST, SECOND = range(2)
+FIRST, SECOND, THIRD, FOURTH = range(4)
 
 
 HEADERS = {'X-API-KEY': f'{KINOPOISK_TOKEN}'}
@@ -81,15 +82,6 @@ def translate_film_type(type):
     return CONTENT_TYPES.get(type, type)
 
 
-def create_kinopoisk_link(type, genre):
-    """Формирует ссылку кинопоиска в зависимости от запросов юзеров."""
-    payload = {
-        'type': type,
-        'genres.name': genre,
-    }
-    return requests.get(URL, params=payload, headers=HEADERS).json()
-
-
 def generate_film_info(film_data):
     """Генерирует информацию о фильме от API кинопоиска."""
     genre_names = [genre.get("name") for genre in film_data.get("genres", [])]
@@ -112,7 +104,9 @@ def generate_film_info(film_data):
     return film_info
 
 
-def get_random_film(update, context, genre=None, type=None):
+def get_random_film(
+        update, context, genre=None, type=None, country=None, rating=None
+        ):
     """Отправляет пользователю сообщение с данными о рандомном фильме."""
     chat = update.effective_chat
     context.bot.send_message(
@@ -122,6 +116,8 @@ def get_random_film(update, context, genre=None, type=None):
     payload = {
         'type': type,
         'genres.name': genre,
+        'countries.name': country,
+        'rating.kp': rating
     }
     film_data = requests.get(
         URL, params=payload if payload else None, headers=HEADERS
@@ -187,27 +183,70 @@ def choose_genre(update, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
-        'Отлично, теперь выберите жанр:',
+        'Отлично, теперь выбери жанр:',
         reply_markup=reply_markup
     )
     return SECOND
 
-
-def get_filtered_film(update, context):
+def choose_country(update, context):
+    """Пользователь выбирает страну и продолжает разговор."""
     query = update.callback_query
     query.answer()
     genre = query.data
     context.user_data['genre'] = genre
-    get_random_film(update=update,
-                    context=context,
-                    genre=context.user_data["genre"],
-                    type=context.user_data["type"])
-    return ConversationHandler.END
+    query.message.reply_text('Теперь введи название страны:')
+    return THIRD
+
+
+def choose_rating(update, context):
+    """Пользователь выбирает рейтинг и продолжает разговор."""
+    country = update.message.text
+    context.user_data['country'] = country
+    update.message.reply_text(
+        'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
+        'разделенных дефисом (пример: 7, 10, 7.2-10).')
+    return FOURTH
+
+
+def get_filtered_film(update, context):
+    try:
+        rating_text = update.message.text
+        match = re.fullmatch(
+            r'(10|[1-9](\.[0-9]+)?)(-(10|[1-9](\.[0-9]+)?))?', rating_text
+            )
+        if match is not None:
+            ratings = [float(rating) for rating in rating_text.split('-')]
+            if len(ratings) == 2 and ratings[0] > ratings[1]:
+                update.message.reply_text(
+                    'Нижняя граница диапазона не может быть больше верхней. '
+                    'Пожалуйста, введи корректный диапазон.'
+                    )
+                return FOURTH
+            context.user_data['rating'] = rating_text
+            get_random_film(update=update,
+                            context=context,
+                            genre=context.user_data["genre"],
+                            type=context.user_data["type"],
+                            country=context.user_data['country'],
+                            rating=context.user_data['rating'])
+            return ConversationHandler.END
+        else:
+            update.message.reply_text(
+                'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
+                'разделенных дефисом (пример: 7, 10, 7.2-10).'
+                )
+            return FOURTH
+    except ValueError:
+        update.message.reply_text(
+            'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
+            'разделенных дефисом (пример: 7, 10, 7.2-10).'
+            )
+        return FOURTH
 
 
 def cancel(update, context):
     update.message.from_user
-    update.message.reply_text('Bye! I hope we can talk again some day.')
+    update.message.reply_text('Ты вернулся в главное меню.')
     return ConversationHandler.END
 
 
@@ -218,15 +257,17 @@ def main():
 
     start_handler = CommandHandler('start', start)
     help_handler = CommandHandler('help', help)
-    echo_handler = MessageHandler(Filters.text & (~Filters.command), echo)
+    echo_handler = MessageHandler(Filters.text & ~Filters.command & ~ConversationHandler.END, echo)
     random_film_handler = CommandHandler('randomfilm', get_random_film)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('findfilm', start_conversation)],
         states={
             FIRST: [CallbackQueryHandler(choose_genre)],
-            SECOND: [CallbackQueryHandler(get_filtered_film)]
+            SECOND: [CallbackQueryHandler(choose_country)],
+            THIRD: [MessageHandler(Filters.text & ~Filters.command, choose_rating)],
+            FOURTH: [MessageHandler(Filters.text & ~Filters.command, get_filtered_film)],
         },
-        fallbacks=[CommandHandler('findfilm', start_conversation)]
+        fallbacks=[CommandHandler('cancel', cancel)]
     )
 
     dispatcher.add_handler(start_handler)
