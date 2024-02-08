@@ -5,8 +5,9 @@ import re
 
 import requests
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
+    RegexHandler,
     CallbackQueryHandler,
     CommandHandler,
     ConversationHandler,
@@ -48,15 +49,12 @@ def start(update, context):
     """Выводит сообщение при команде /start."""
     name = update.message.chat.first_name
     chat = update.effective_chat
-    buttons = ReplyKeyboardMarkup(
-        [['/findfilm'], ['/randomfilm'], ['/help']],
-        resize_keyboard=True)
     context.bot.send_message(
         chat_id=chat.id,
-        text='❤️ Спасибо, что включили меня, {} !\n'
-        '❔ Чтобы узнать, что я умею, воспользуйтесь командой /help '.format(name),
-        reply_markup=buttons
-        )
+        text=f'❤️ Спасибо, что включил меня, {name} !\n'
+        '❔ Чтобы узнать, что я умею, воспользуйся командой /help\n'
+        '⬇ Для начала воспользуйся кнопкой меню.'
+    )
 
 
 def help(update, context):
@@ -135,7 +133,7 @@ def get_random_film(
     else:
         context.bot.send_message(
             chat.id,
-            'Не удалось получить информацию о фильме. Попробуйте еще раз.'
+            'К сожалению, фильмов с такими параметрами не найдено.'
         )
 
 
@@ -145,22 +143,23 @@ def start_conversation(update, context):
     logging.info(f'Пользователь {user.first_name} начал беседу.')
     keyboard = [
         [
-            InlineKeyboardButton('Фильм', callback_data='movie'),
-            InlineKeyboardButton('Сериал', callback_data='tv-series'),
+            InlineKeyboardButton('Фильм 🎥', callback_data='movie'),
+            InlineKeyboardButton('Сериал 📺', callback_data='tv-series'),
         ],
         [
-            InlineKeyboardButton('Мультсериал', callback_data='animated-series'),
-            InlineKeyboardButton('Мульфильм', callback_data='cartoon'),
+            InlineKeyboardButton('Мультсериал 👧🏻', callback_data='animated-series'),
+            InlineKeyboardButton('Мульфильм 👶', callback_data='cartoon'),
             ],
         [
-            InlineKeyboardButton('Аниме', callback_data='anime'),
-        ]
+            InlineKeyboardButton('Аниме 🍜', callback_data='anime'),
+        ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     update.message.reply_text(
-        'Давай подберем тебе что-то интересное 😎, для начала выберем тип:',
+        'Сейчас подберем тебе что-то интересное 😎\n'
+        'Для начала давай выберем, что ты хочешь посмотреть:',
         reply_markup=reply_markup)
     return FIRST
 
@@ -173,13 +172,28 @@ def choose_genre(update, context):
     context.user_data['type'] = type
     keyboard = [
         [
-            InlineKeyboardButton('Комедия', callback_data='комедия'),
-            InlineKeyboardButton('Боевик', callback_data='боевик'),
+            InlineKeyboardButton('Комедия 😂', callback_data='комедия'),
+            InlineKeyboardButton('Боевик 🔫', callback_data='боевик'),
+            InlineKeyboardButton('Драма 😢', callback_data='драма')
         ],
         [
-            InlineKeyboardButton('Вестерн', callback_data='вестерн'),
-            InlineKeyboardButton('Детектив', callback_data='детектив'),
-            ],
+            InlineKeyboardButton('Ужасы 😱', callback_data='ужасы'),
+            InlineKeyboardButton('Детектив 🕵️‍♂️', callback_data='детектив'),
+            InlineKeyboardButton('Фантастика 👽', callback_data='фантастика')
+        ],
+        [
+            InlineKeyboardButton('Вестерн 🤠', callback_data='вестерн'),
+            InlineKeyboardButton('Военный 🎖️', callback_data='военный'),
+            InlineKeyboardButton('Фентези 🧙‍♂️', callback_data='фентези')
+        ],
+        [
+            InlineKeyboardButton('История 🏰', callback_data='история'),
+            InlineKeyboardButton('Мелодрама ❤️', callback_data='мелодрама'),
+            InlineKeyboardButton('Криминал 🚔', callback_data='криминал')
+        ],
+        [
+            InlineKeyboardButton('Пропустить ⏩', callback_data='skip_genre'),
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     query.message.reply_text(
@@ -188,12 +202,16 @@ def choose_genre(update, context):
     )
     return SECOND
 
+
 def choose_country(update, context):
     """Пользователь выбирает страну и продолжает разговор."""
     query = update.callback_query
     query.answer()
     genre = query.data
-    context.user_data['genre'] = genre
+    if genre == 'skip_genre':
+        context.user_data['genre'] = None
+    else:
+        context.user_data['genre'] = genre
     query.message.reply_text('Теперь введи название страны:')
     return THIRD
 
@@ -203,8 +221,8 @@ def choose_rating(update, context):
     country = update.message.text
     context.user_data['country'] = country
     update.message.reply_text(
-        'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
-        'разделенных дефисом (пример: 7, 10, 7.2-10).')
+        'Давай выберем рейтинг, введи диапазон чисел через дефис, '
+        '(например: 7.2-10).')
     return FOURTH
 
 
@@ -245,8 +263,10 @@ def get_filtered_film(update, context):
 
 
 def cancel(update, context):
-    update.message.from_user
-    update.message.reply_text('Ты вернулся в главное меню.')
+    """Завершает разговор и возвращает пользователя в главное меню."""
+    user = update.message.from_user
+    logging.info(f'Пользователь {user.first_name} отменил разговор.')
+    update.message.reply_text('Ты вернулся в главное меню')
     return ConversationHandler.END
 
 
@@ -262,10 +282,10 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('findfilm', start_conversation)],
         states={
-            FIRST: [CallbackQueryHandler(choose_genre)],
-            SECOND: [CallbackQueryHandler(choose_country)],
-            THIRD: [MessageHandler(Filters.text & ~Filters.command, choose_rating)],
-            FOURTH: [MessageHandler(Filters.text & ~Filters.command, get_filtered_film)],
+            FIRST: [CallbackQueryHandler(choose_genre, pass_user_data=True),],
+            SECOND: [CallbackQueryHandler(choose_country, pass_user_data=True)],
+            THIRD: [MessageHandler(Filters.text & ~Filters.command, choose_rating, pass_user_data=True)],
+            FOURTH: [MessageHandler(Filters.text & ~Filters.command, get_filtered_film, pass_user_data=True)],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
