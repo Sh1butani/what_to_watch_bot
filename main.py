@@ -1,18 +1,23 @@
 import logging
 import os
-import sys
 import re
+import sys
 
 import requests
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from telegram.ext import (
-    RegexHandler,
     CallbackQueryHandler,
     CommandHandler,
     ConversationHandler,
     Filters,
     MessageHandler,
+    RegexHandler,
     Updater,
 )
 
@@ -67,14 +72,6 @@ def help(update, context):
     )
 
 
-def echo(update, context):
-    """Отвечает на любое текстовое сообщение пользователя."""
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Воспользуйтесь командой /help для детальной информации.'
-        )
-
-
 def translate_film_type(type):
     """Переводит английское значение типа на русское."""
     return CONTENT_TYPES.get(type, type)
@@ -107,10 +104,6 @@ def get_random_film(
         ):
     """Отправляет пользователю сообщение с данными о рандомном фильме."""
     chat = update.effective_chat
-    context.bot.send_message(
-        chat_id=chat.id,
-        text='Посмотри, какой фильм я тебе нашёл',
-        )
     payload = {
         'type': type,
         'genres.name': genre,
@@ -227,6 +220,7 @@ def choose_rating(update, context):
 
 
 def get_filtered_film(update, context):
+    """Получает отфильтрвванный фильм по рейтингу."""
     try:
         rating_text = update.message.text
         match = re.fullmatch(
@@ -247,6 +241,18 @@ def get_filtered_film(update, context):
                             type=context.user_data["type"],
                             country=context.user_data['country'],
                             rating=context.user_data['rating'])
+            keyboard = [
+                [
+                    KeyboardButton("Еще один"),
+                    KeyboardButton("Начать заново"),
+                    KeyboardButton("Главное меню"),
+                ]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            update.message.reply_text(
+                'Если не понравился, всегда можешь повторить свой запрос 😊',
+                reply_markup=reply_markup
+            )
             return ConversationHandler.END
         else:
             update.message.reply_text(
@@ -260,6 +266,33 @@ def get_filtered_film(update, context):
             'разделенных дефисом (пример: 7, 10, 7.2-10).'
             )
         return FOURTH
+
+
+def another_film(update, context):
+    """Находит еще один фильм с таким же запросом."""
+    get_random_film(update=update,
+                    context=context,
+                    genre=context.user_data["genre"],
+                    type=context.user_data["type"],
+                    country=context.user_data['country'],
+                    rating=context.user_data['rating'])
+    keyboard = [
+        [
+            KeyboardButton("Еще один"),
+            KeyboardButton("Начать заново"),
+            KeyboardButton("Главное меню"),
+        ]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        'Если не понравился, всегда можешь повторить свой запрос 😊',
+        reply_markup=reply_markup
+    )
+
+
+def restart(update, context):
+    """Начинает поиск заново."""
+    start_conversation(update, context)
 
 
 def cancel(update, context):
@@ -277,24 +310,38 @@ def main():
 
     start_handler = CommandHandler('start', start)
     help_handler = CommandHandler('help', help)
-    echo_handler = MessageHandler(Filters.text & ~Filters.command & ~ConversationHandler.END, echo)
     random_film_handler = CommandHandler('randomfilm', get_random_film)
+    main_menu_handler = RegexHandler('^Главное меню$', cancel)
+    restart_handler = RegexHandler('^Начать заново$', restart)
+    another_film_handler = RegexHandler('^Еще один$', another_film)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('findfilm', start_conversation)],
         states={
-            FIRST: [CallbackQueryHandler(choose_genre, pass_user_data=True),],
-            SECOND: [CallbackQueryHandler(choose_country, pass_user_data=True)],
-            THIRD: [MessageHandler(Filters.text & ~Filters.command, choose_rating, pass_user_data=True)],
-            FOURTH: [MessageHandler(Filters.text & ~Filters.command, get_filtered_film, pass_user_data=True)],
+            FIRST: [
+                CallbackQueryHandler(choose_genre, pass_user_data=True)
+                ],
+            SECOND: [
+                CallbackQueryHandler(choose_country, pass_user_data=True)
+                ],
+            THIRD: [
+                MessageHandler(Filters.text & ~Filters.command,
+                               choose_rating, pass_user_data=True)
+                               ],
+            FOURTH: [
+                MessageHandler(Filters.text & ~Filters.command,
+                               get_filtered_film, pass_user_data=True)
+                               ],
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
 
     dispatcher.add_handler(start_handler)
     dispatcher.add_handler(help_handler)
-    dispatcher.add_handler(echo_handler)
     dispatcher.add_handler(random_film_handler)
     dispatcher.add_handler(conv_handler)
+    dispatcher.add_handler(main_menu_handler)
+    dispatcher.add_handler(restart_handler)
+    dispatcher.add_handler(another_film_handler)
 
     updater.start_polling()
     updater.idle()
