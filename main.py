@@ -10,6 +10,7 @@ from telegram import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     CallbackQueryHandler,
@@ -299,7 +300,9 @@ def cancel(update, context):
     """Завершает разговор и возвращает пользователя в главное меню."""
     user = update.message.from_user
     logging.info(f'Пользователь {user.first_name} отменил разговор.')
-    update.message.reply_text('Ты вернулся в главное меню')
+    update.message.reply_text(
+        'Ты вернулся в главное меню', reply_markup=ReplyKeyboardRemove()
+        )
     return ConversationHandler.END
 
 
