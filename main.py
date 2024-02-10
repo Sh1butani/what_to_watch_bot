@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import sys
+import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -44,11 +45,11 @@ CONTENT_TYPES = {
 }
 
 
-FIRST, SECOND, THIRD, FOURTH = range(4)
+FIRST, SECOND, THIRD, FOURTH, START_OVER = range(5)
 
 
 HEADERS = {'X-API-KEY': f'{KINOPOISK_TOKEN}'}
-URL = 'https://api.kinopoisk.dev/v1.4/movie/random?notNullFields=name&notNullFields=description&notNullFields=type&notNullFields=year&notNullFields=movieLength'
+URL = 'https://api.kinopoisk.dev/v1.4/movie/random?'
 
 
 def start(update, context):
@@ -101,14 +102,14 @@ def generate_film_info(film_data):
 
 
 def get_random_film(
-        update, context, genre=None, type=None, country=None, rating=None
+        update, context, genre=None, type=None, year=None, rating=None
         ):
     """Отправляет пользователю сообщение с данными о рандомном фильме."""
     chat = update.effective_chat
     payload = {
         'type': type,
         'genres.name': genre,
-        'countries.name': country,
+        'year': year,
         'rating.kp': rating
     }
     film_data = requests.get(
@@ -132,7 +133,7 @@ def get_random_film(
 
 
 def start_conversation(update, context):
-    """Начинает разговор и спрашивает про тип запроса к API."""
+    """Начинает разговор и спрашивает про тип запроса."""
     user = update.message.from_user
     logging.info(f'Пользователь {user.first_name} начал беседу.')
     keyboard = [
@@ -153,7 +154,7 @@ def start_conversation(update, context):
 
     update.message.reply_text(
         'Сейчас подберем тебе что-то интересное 😎\n'
-        'Для начала давай выберем, что ты хочешь посмотреть:',
+        'Давай для начала выберем, что ты хочешь посмотреть:',
         reply_markup=reply_markup)
     return FIRST
 
@@ -178,7 +179,7 @@ def choose_genre(update, context):
         [
             InlineKeyboardButton('Вестерн 🤠', callback_data='вестерн'),
             InlineKeyboardButton('Военный 🎖️', callback_data='военный'),
-            InlineKeyboardButton('Фентези 🧙‍♂️', callback_data='фентези')
+            InlineKeyboardButton('Фэнтези 🧙‍♂️', callback_data='фэнтези')
         ],
         [
             InlineKeyboardButton('История 🏰', callback_data='история'),
@@ -197,8 +198,8 @@ def choose_genre(update, context):
     return SECOND
 
 
-def choose_country(update, context):
-    """Пользователь выбирает страну и продолжает разговор."""
+def choose_year(update, context):
+    """Пользователь выбирает год и продолжает разговор."""
     query = update.callback_query
     query.answer()
     genre = query.data
@@ -206,17 +207,40 @@ def choose_country(update, context):
         context.user_data['genre'] = None
     else:
         context.user_data['genre'] = genre
-    query.message.reply_text('Теперь введи название страны:')
+    query.message.reply_text(
+        'Теперь введи год выпуска(например: 2005, 2020-2024):'
+        )
     return THIRD
 
 
 def choose_rating(update, context):
     """Пользователь выбирает рейтинг и продолжает разговор."""
-    country = update.message.text
-    context.user_data['country'] = country
+    year = update.message.text
+    pattern = r"^(19[0-9]{2}|20[0-2][0-9])$|^(19[0-9]{2}|20[0-2][0-9])-(19[0-9]{2}|20[0-2][0-9])$"
+    if re.match(pattern, year):
+        current_year = datetime.datetime.now().year
+        if '-' in year:
+            year_parts = year.split('-')
+            start_year = int(year_parts[0])
+            end_year = int(year_parts[1])
+            if start_year <= current_year and end_year <= current_year:
+                context.user_data['year'] = year
+            else:
+                update.message.reply_text('Год или диапазон годов не может быть позже текущего года.')
+                return THIRD
+        else:
+            if int(year) <= current_year:
+                context.user_data['year'] = year
+            else:
+                update.message.reply_text('Год или диапазон годов не может быть позже текущего года.')
+                return THIRD
+    else:
+        update.message.reply_text('Неверный формат года, введи год или диапазон годов через дефис (например: 2020 или 2020-2021).')
+        return THIRD
+
     update.message.reply_text(
         'Давай выберем рейтинг, введи диапазон чисел через дефис, '
-        '(например: 7.2-10).')
+        '(например: 7-10).')
     return FOURTH
 
 
@@ -225,7 +249,7 @@ def get_filtered_film(update, context):
     try:
         rating_text = update.message.text
         match = re.fullmatch(
-            r'(10|[1-9](\.[0-9]+)?)(-(10|[1-9](\.[0-9]+)?))?', rating_text
+             r'([1-9]|10)-([1-9]|10)', rating_text
             )
         if match is not None:
             ratings = [float(rating) for rating in rating_text.split('-')]
@@ -240,7 +264,7 @@ def get_filtered_film(update, context):
                             context=context,
                             genre=context.user_data["genre"],
                             type=context.user_data["type"],
-                            country=context.user_data['country'],
+                            year=context.user_data['year'],
                             rating=context.user_data['rating'])
             keyboard = [
                 [
@@ -257,14 +281,14 @@ def get_filtered_film(update, context):
             return ConversationHandler.END
         else:
             update.message.reply_text(
-                'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
-                'разделенных дефисом (пример: 7, 10, 7.2-10).'
+                'Пожалуйста, введи диапазон чисел, '
+                'разделенных дефисом (например: 7-10).'
                 )
             return FOURTH
     except ValueError:
         update.message.reply_text(
-            'Пожалуйста, введи число от 1 до 10 или диапазон чисел, '
-            'разделенных дефисом (пример: 7, 10, 7.2-10).'
+                'Пожалуйста, введи диапазон чисел, '
+                'разделенных дефисом (например: 7-10).'
             )
         return FOURTH
 
@@ -275,7 +299,7 @@ def another_film(update, context):
                     context=context,
                     genre=context.user_data["genre"],
                     type=context.user_data["type"],
-                    country=context.user_data['country'],
+                    year=context.user_data['year'],
                     rating=context.user_data['rating'])
     keyboard = [
         [
@@ -289,11 +313,6 @@ def another_film(update, context):
         'Если не понравился, всегда можешь повторить свой запрос 😊',
         reply_markup=reply_markup
     )
-
-
-def restart(update, context):
-    """Начинает поиск заново."""
-    start_conversation(update, context)
 
 
 def cancel(update, context):
@@ -315,16 +334,16 @@ def main():
     help_handler = CommandHandler('help', help)
     random_film_handler = CommandHandler('randomfilm', get_random_film)
     main_menu_handler = RegexHandler('^Главное меню$', cancel)
-    restart_handler = RegexHandler('^Начать заново$', restart)
     another_film_handler = RegexHandler('^Еще один$', another_film)
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('findfilm', start_conversation)],
+        entry_points=[CommandHandler('findfilm', start_conversation),
+                      RegexHandler('^Начать заново$', start_conversation)],
         states={
             FIRST: [
-                CallbackQueryHandler(choose_genre, pass_user_data=True)
+                CallbackQueryHandler(choose_genre, pass_user_data=True),
                 ],
             SECOND: [
-                CallbackQueryHandler(choose_country, pass_user_data=True)
+                CallbackQueryHandler(choose_year, pass_user_data=True)
                 ],
             THIRD: [
                 MessageHandler(Filters.text & ~Filters.command,
@@ -333,7 +352,7 @@ def main():
             FOURTH: [
                 MessageHandler(Filters.text & ~Filters.command,
                                get_filtered_film, pass_user_data=True)
-                               ],
+                               ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
@@ -343,7 +362,6 @@ def main():
     dispatcher.add_handler(random_film_handler)
     dispatcher.add_handler(conv_handler)
     dispatcher.add_handler(main_menu_handler)
-    dispatcher.add_handler(restart_handler)
     dispatcher.add_handler(another_film_handler)
 
     updater.start_polling()
