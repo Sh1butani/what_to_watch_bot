@@ -208,7 +208,7 @@ def choose_year(update, context):
     else:
         context.user_data['genre'] = genre
     query.message.reply_text(
-        'Теперь введи год выпуска(например: 2005, 2020-2024):'
+        'Теперь введи год выпуска(например: 2020-2024):'
         )
     return THIRD
 
@@ -232,14 +232,14 @@ def choose_rating(update, context):
             if int(year) <= current_year:
                 context.user_data['year'] = year
             else:
-                update.message.reply_text('Год или диапазон годов не может быть позже текущего года.')
+                update.message.reply_text('Диапазон годов не может быть позже текущего года.')
                 return THIRD
     else:
-        update.message.reply_text('Неверный формат года, введи год или диапазон годов через дефис (например: 2020 или 2020-2021).')
+        update.message.reply_text('Неверный формат года, введи диапазон годов через дефис (например: 2020-2021).')
         return THIRD
 
     update.message.reply_text(
-        'Давай выберем рейтинг, введи диапазон чисел через дефис, '
+        'Давай выберем рейтинг, введи диапазон чисел через дефис '
         '(например: 7-10).')
     return FOURTH
 
