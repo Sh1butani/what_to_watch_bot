@@ -60,12 +60,6 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Перейти в директорию infra:
-
-```
-cd infra
-```
-
 Добавить в файл .env:
 ```python
 KINOPOISK_TOKEN='Токен кинопоиска'
