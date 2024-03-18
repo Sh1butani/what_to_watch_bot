@@ -60,12 +60,16 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Добавить в файл .env:
+Создать и добавить в файл .env:
 ```python
 KINOPOISK_TOKEN='Токен кинопоиска'
 TG_TOKEN='Токен телеграм-бота'
 TELEGRAM_CHAT_ID='@Id чата'
 ```
+
+### Доработка:
+Планирую добавить еще несколько фильтров, написать тесты, скорректировать в некоторых местах клавиаутры.
+
 
 ### Автор:
 [David Pilosyan](https://t.me/Shibutani)
