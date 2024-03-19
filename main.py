@@ -113,9 +113,10 @@ def generate_film_info(film_data):
         else f'Кинопоиск: {kp_rating}\n'
     )
     imdb_link = (
-        f'<a href="https://www.imdb.com/title/{film_data.get("externalId").get("imdb")}">'
-        f'IMDB: {imdb_rating}</a>\n' if film_data.get("externalId")
-        and film_data.get("externalId").get("imdb")
+        f'<a href="https://www.imdb.com/title/'
+        f'{film_data.get("externalId").get("imdb")}">'
+        f'IMDB: {imdb_rating}</a>\n' if film_data.get("externalId") and
+        film_data.get("externalId").get("imdb")
         else f'IMDB: {imdb_rating}\n'
     )
     film_length = (
@@ -140,7 +141,7 @@ def generate_film_info(film_data):
 
 def get_random_film(
         update, context, genre=None, type=None, year=None, rating=None
-        ):
+):
     """Отправляет пользователю сообщение с данными о рандомном фильме."""
     chat = update.effective_chat
     payload = {
@@ -224,7 +225,7 @@ def choose_year(update, context):
     logging.info(f"Пользователь выбрал жанр: {genre}")
     query.message.reply_text(
         'Теперь введи год выпуска(например: 2020 или 2020-2024):'
-        )
+    )
     return THIRD
 
 
@@ -233,7 +234,8 @@ def choose_rating(update, context):
     year = update.message.text
     logging.info(f"Пользователь ввел год: {year}")
     year_start_pattern = r"^(19[0-9]{2}|20[0-2][0-9])$"
-    year_range_pattern = r"^(19[0-9]{2}|20[0-2][0-9])-(19[0-9]{2}|20[0-2][0-9])"
+    year_range_pattern = r"^(19[0-9]{2}|20[0-2][0-9])" + \
+                         r"-(19[0-9]{2}|20[0-2][0-9])"
     pattern = "|".join([year_start_pattern, year_range_pattern])
     current_year = datetime.datetime.now().year
 
@@ -344,7 +346,7 @@ def cancel(update, context):
     logging.info(f'Пользователь {user.first_name} отменил разговор.')
     update.message.reply_text(
         'Ты вернулся в главное меню', reply_markup=ReplyKeyboardRemove()
-        )
+    )
     return ConversationHandler.END
 
 
@@ -364,18 +366,18 @@ def main():
         states={
             FIRST: [
                 CallbackQueryHandler(choose_genre, pass_user_data=True),
-                ],
+            ],
             SECOND: [
                 CallbackQueryHandler(choose_year, pass_user_data=True)
-                ],
+            ],
             THIRD: [
                 MessageHandler(Filters.text & ~Filters.command,
                                choose_rating, pass_user_data=True)
-                               ],
+            ],
             FOURTH: [
                 MessageHandler(Filters.text & ~Filters.command,
                                get_filtered_film, pass_user_data=True)
-                               ]
+            ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )

@@ -11,7 +11,7 @@ keyboard_film_type = [
             'Мультсериал 👧🏻', callback_data='animated-series'
         ),
         InlineKeyboardButton('Мульфильм 👶', callback_data='cartoon'),
-        ],
+    ],
     [
         InlineKeyboardButton('Аниме 🍜', callback_data='anime'),
     ],
